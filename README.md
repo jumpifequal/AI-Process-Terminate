@@ -143,6 +143,15 @@ match `Gemini.exe`, `gemini-helper.exe`, `com.google.gemini.exe`, etc.
 
 Then rebuild with `build.bat`.
 
+## Integration in a Total Commander buttonbar
+```
+button20=%COMMANDER_PATH%\Tools\aiProcess-Terminate.exe
+cmd20=%COMMANDER_PATH%\Tools\aiProcess-Terminate.exe
+path20=%COMMANDER_PATH%\Tools\
+iconic20=0
+menu20=AI Process Terminate
+```
+
 ---
 
 ## Building from source
