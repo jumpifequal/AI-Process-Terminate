@@ -1,4 +1,4 @@
-# AI Process Terminate
+# AI Process-Terminate
 
 A lightweight Windows utility that terminates desktop AI assistant processes
 (Claude, Copilot, Perplexity, Codex, …) in one shot — no admin rights needed.
@@ -159,9 +159,10 @@ build.bat
 
 Output: `AIProcess-Terminate.exe` in the same folder.
 
-The build script compiles with `/W4 /WX` (all warnings treated as errors) and
-links `psapi.lib`, `comctl32.lib`, and `user32.lib`. No third-party libraries
-are required.
+The build script compiles `resource.rc` with `rc.exe` to embed the application
+icon, then compiles the C++ source with `/W4 /WX` (all warnings treated as
+errors) and links `psapi.lib`, `comctl32.lib`, and `user32.lib`. No
+third-party libraries are required.
 
 ---
 
