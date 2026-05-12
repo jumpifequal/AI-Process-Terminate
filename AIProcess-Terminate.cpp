@@ -1,6 +1,6 @@
 // AIProcess-Terminate.cpp
 //
-// Terminates AI-assistant processes on Windows 11 x64.
+// Terminates AI-assistant processes on Windows 10/11.
 // Runs fully in userland — no elevation required.
 // Can only terminate processes owned by the current user.
 //
@@ -12,6 +12,7 @@
 #pragma comment(lib, "comctl32.lib")
 // UAC manifest level set to asInvoker in build.bat via /MANIFESTUAC linker flag.
 
+
 #include <windows.h>
 #include <commctrl.h>
 #include <tlhelp32.h>
@@ -22,19 +23,56 @@
 #include <sstream>
 
 // ---------------------------------------------------------------------------
-// TARGET LIST — partial, case-insensitive match on executable name.
-// EXTEND HERE
+// Loads target keywords from <exedir>\AIProcess-Terminate.ini, section
+// [Targets], key "keywords" (comma-separated list).
+// Falls back to a built-in default list if the file or key is absent.
 // ---------------------------------------------------------------------------
-static const std::vector<std::wstring> TARGET_NAMES = {
-    L"claude",
-    L"copilot",
-    L"perplexity",
-    L"codex",
-    L"gemini",
-    L"manus",
-    L"antigravity",
-    // EXTEND HERE
-};
+static std::vector<std::wstring> LoadTargetNames()
+{
+    // Build INI path: same directory as the running executable.
+    wchar_t exePath[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+    if (lastSlash) *(lastSlash + 1) = L'\0';
+    const std::wstring iniPath = std::wstring(exePath) + L"AIProcess-Terminate.ini";
+
+    wchar_t raw[4096] = {};
+    GetPrivateProfileStringW(L"Targets", L"keywords", L"",
+                             raw, _countof(raw), iniPath.c_str());
+
+    // Split on commas, trim whitespace from each token.
+    std::vector<std::wstring> result;
+    std::wstring token;
+    for (wchar_t ch : std::wstring(raw))
+    {
+        if (ch == L',')
+        {
+            const size_t s = token.find_first_not_of(L" \t");
+            const size_t e = token.find_last_not_of(L" \t");
+            if (s != std::wstring::npos)
+                result.push_back(token.substr(s, e - s + 1));
+            token.clear();
+        }
+        else
+        {
+            token += ch;
+        }
+    }
+    // Last (or only) token after the final comma.
+    {
+        const size_t s = token.find_first_not_of(L" \t");
+        const size_t e = token.find_last_not_of(L" \t");
+        if (s != std::wstring::npos)
+            result.push_back(token.substr(s, e - s + 1));
+    }
+
+    // Built-in fallback — used when the INI file is absent or keywords is empty.
+    if (result.empty())
+        result = { L"claude", L"copilot", L"perplexity",
+                   L"codex",  L"gemini",  L"manus", L"antigravity" };
+
+    return result;
+}
 
 // ---------------------------------------------------------------------------
 // One entry per tool category (one row in the dialog).
@@ -83,14 +121,14 @@ static bool MatchesKeyword(const std::wstring& exeName, const std::wstring& keyw
 }
 
 // ---------------------------------------------------------------------------
-// Counts running instances per TARGET_NAMES keyword.
+// Counts running instances per keyword.
 // Returns only categories that have at least one running process.
 // ---------------------------------------------------------------------------
-static std::vector<CategoryInfo> ScanCategories()
+static std::vector<CategoryInfo> ScanCategories(const std::vector<std::wstring>& targetNames)
 {
     std::vector<CategoryInfo> cats;
-    cats.reserve(TARGET_NAMES.size());
-    for (const auto& kw : TARGET_NAMES)
+    cats.reserve(targetNames.size());
+    for (const auto& kw : targetNames)
     {
         CategoryInfo ci;
         ci.keyword  = kw;
@@ -144,10 +182,70 @@ struct DlgContext
     std::vector<CategoryInfo>& cats;
     bool                       confirmed;
     HWND                       hwndList;
+    HWND                       hwndInstr;
+    HWND                       hwndOK;
+    HWND                       hwndAbort;
 
     explicit DlgContext(std::vector<CategoryInfo>& c)
-        : cats(c), confirmed(false), hwndList(nullptr) {}
+        : cats(c), confirmed(false),
+          hwndList(nullptr), hwndInstr(nullptr),
+          hwndOK(nullptr),   hwndAbort(nullptr) {}
 };
+
+// ---------------------------------------------------------------------------
+// Repositions and resizes all child controls to fill the current client area.
+// All layout constants are scaled to the window's current DPI.
+// Called from WM_CREATE, WM_SIZE, and WM_DPICHANGED.
+// ---------------------------------------------------------------------------
+static void LayoutControls(HWND hwnd, DlgContext* ctx)
+{
+    RECT rc = {};
+    GetClientRect(hwnd, &rc);
+    const int cw = rc.right;
+    const int ch = rc.bottom;
+
+    // Scale every pixel constant to the window's actual DPI.
+    const UINT dpi = GetDpiForWindow(hwnd);
+    const UINT d   = (dpi > 0) ? dpi : 96;
+    const auto Sc  = [d](int v){ return MulDiv(v, static_cast<int>(d), 96); };
+
+    const int M         = Sc(8);
+    const int BTN_H     = Sc(28);
+    const int INSTR_H   = Sc(22);
+    const int lvH       = ch - 4 * M - INSTR_H - BTN_H;
+    const int instrY    = M + lvH + M;
+    const int btnY      = instrY + INSTR_H + M;
+
+    const int BTN_ABORT_W = Sc(90);
+    const int BTN_OK_W    = Sc(190);
+    const int BTN_GAP     = Sc(6);
+    const int abortX      = cw - M - BTN_ABORT_W;
+    const int okX         = abortX - BTN_GAP - BTN_OK_W;
+
+    HDWP hdwp = BeginDeferWindowPos(4);
+    if (hdwp)
+    {
+        hdwp = DeferWindowPos(hdwp, ctx->hwndList,  nullptr,
+                              M,      M,      cw - 2*M,    lvH,    SWP_NOZORDER);
+        hdwp = DeferWindowPos(hdwp, ctx->hwndInstr, nullptr,
+                              M,      instrY, cw - 2*M,    INSTR_H, SWP_NOZORDER);
+        hdwp = DeferWindowPos(hdwp, ctx->hwndOK,    nullptr,
+                              okX,    btnY,   BTN_OK_W,    BTN_H,  SWP_NOZORDER);
+        hdwp = DeferWindowPos(hdwp, ctx->hwndAbort, nullptr,
+                              abortX, btnY,   BTN_ABORT_W, BTN_H,  SWP_NOZORDER);
+        EndDeferWindowPos(hdwp);
+    }
+
+    // Force a clean repaint so static controls don't smear on resize.
+    InvalidateRect(hwnd, nullptr, TRUE);
+
+    // Keep the ListView column flush with the new width.
+    if (ctx->hwndList)
+    {
+        const int colW = cw - 2*M - GetSystemMetrics(SM_CXVSCROLL) - 4;
+        ListView_SetColumnWidth(ctx->hwndList, 0, max(colW, 80));
+    }
+}
 
 // ---------------------------------------------------------------------------
 static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -163,33 +261,21 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         ctx = reinterpret_cast<DlgContext*>(cs->lpCreateParams);
         SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
-        RECT rc = {};
-        GetClientRect(hwnd, &rc);
-        const int cw = rc.right;
-        const int ch = rc.bottom;
-
-        const int M       = 8;
-        const int BTN_H   = 28;
-        const int INSTR_H = 22;
-        const int lvH     = ch - 4 * M - INSTR_H - BTN_H;
-        const int instrY  = M + lvH + M;
-        const int btnY    = instrY + INSTR_H + M;
-
         // ── ListView ─────────────────────────────────────────────────────
         ctx->hwndList = CreateWindowEx(
             WS_EX_CLIENTEDGE, WC_LISTVIEW, L"",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
             LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL,
-            M, M, cw - 2 * M, lvH,
+            0, 0, 0, 0,
             hwnd, ToMenuId(IDC_LISTVIEW), cs->hInstance, nullptr);
 
         ListView_SetExtendedListViewStyle(ctx->hwndList,
             LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
 
-        // Single column: "claude (9)"
+        // Single column — width set by LayoutControls.
         LVCOLUMN col = {};
         col.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-        col.cx      = cw - 2 * M - GetSystemMetrics(SM_CXVSCROLL) - 4;
+        col.cx      = 100;
         col.pszText = const_cast<LPWSTR>(L"Tool");
         ListView_InsertColumn(ctx->hwndList, 0, &col);
 
@@ -220,29 +306,24 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         }
 
         // ── Instruction bar ───────────────────────────────────────────────
-        CreateWindowEx(0, L"STATIC",
+        ctx->hwndInstr = CreateWindowEx(0, L"STATIC",
             L"Up/Dn  Navigate    SPACE  Toggle    ENTER  Confirm    ESC  Abort",
             WS_CHILD | WS_VISIBLE | SS_CENTER,
-            M, instrY, cw - 2 * M, INSTR_H,
+            0, 0, 0, 0,
             hwnd, ToMenuId(IDC_INSTR), cs->hInstance, nullptr);
 
         // ── Buttons ───────────────────────────────────────────────────────
-        const int BTN_ABORT_W = 90;
-        const int BTN_OK_W    = 190;
-        const int BTN_GAP     = 6;
-        const int abortX      = cw - M - BTN_ABORT_W;
-        const int okX         = abortX - BTN_GAP - BTN_OK_W;
-
-        CreateWindowEx(0, L"BUTTON", L"Terminate Selected",
+        ctx->hwndOK = CreateWindowEx(0, L"BUTTON", L"Terminate Selected",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-            okX, btnY, BTN_OK_W, BTN_H,
+            0, 0, 0, 0,
             hwnd, ToMenuId(IDOK), cs->hInstance, nullptr);
 
-        CreateWindowEx(0, L"BUTTON", L"Abort",
+        ctx->hwndAbort = CreateWindowEx(0, L"BUTTON", L"Abort",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            abortX, btnY, BTN_ABORT_W, BTN_H,
+            0, 0, 0, 0,
             hwnd, ToMenuId(IDCANCEL), cs->hInstance, nullptr);
 
+        LayoutControls(hwnd, ctx);
         SetFocus(ctx->hwndList);
         return 0;
     }
@@ -284,6 +365,34 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         return 0;
     }
 
+    case WM_SIZE:
+        if (ctx && wParam != SIZE_MINIMIZED)
+            LayoutControls(hwnd, ctx);
+        return 0;
+
+    case WM_GETMINMAXINFO:
+    {
+        const UINT dpi = GetDpiForWindow(hwnd);
+        const UINT d   = (dpi > 0) ? dpi : 96;
+        MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
+        mmi->ptMinTrackSize.x = MulDiv(400, static_cast<int>(d), 96);
+        mmi->ptMinTrackSize.y = MulDiv(280, static_cast<int>(d), 96);
+        return 0;
+    }
+
+    case WM_DPICHANGED:
+    {
+        // The OS supplies the suggested window rect already scaled to the new DPI.
+        const RECT* r = reinterpret_cast<const RECT*>(lParam);
+        SetWindowPos(hwnd, nullptr,
+                     r->left, r->top,
+                     r->right  - r->left,
+                     r->bottom - r->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        // LayoutControls is called automatically by the WM_SIZE that follows.
+        return 0;
+    }
+
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
@@ -313,14 +422,18 @@ static bool ShowSelectionDialog(std::vector<CategoryInfo>& cats)
     wc.hbrBackground = reinterpret_cast<HBRUSH>(static_cast<INT_PTR>(COLOR_BTNFACE + 1));
     wc.lpszClassName = DLG_CLASS_NAME;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wc.hIcon         = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.hIcon         = LoadIconW(hInst, MAKEINTRESOURCEW(101));
+    wc.hIconSm       = LoadIconW(hInst, MAKEINTRESOURCEW(101));
     RegisterClassEx(&wc);
 
-    const int CLIENT_W = 520;
-    const int CLIENT_H = 320;
+    // Scale default size to the system DPI so the window isn't tiny on HiDPI.
+    const UINT sysDpi  = GetDpiForSystem();
+    const UINT d       = (sysDpi > 0) ? sysDpi : 96;
+    const int CLIENT_W = MulDiv(640, static_cast<int>(d), 96);
+    const int CLIENT_H = MulDiv(460, static_cast<int>(d), 96);
 
-    const DWORD style   = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    const DWORD exStyle = WS_EX_DLGMODALFRAME;
+    const DWORD style   = WS_OVERLAPPEDWINDOW;   // includes thick frame + maximize box
+    const DWORD exStyle = 0;
     RECT adj = { 0, 0, CLIENT_W, CLIENT_H };
     AdjustWindowRectEx(&adj, style, FALSE, exStyle);
     const int winW = adj.right  - adj.left;
@@ -367,7 +480,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
                            wcsstr(lpCmdLine, L"/auto") != nullptr);
 
     // ── 1. SCAN ───────────────────────────────────────────────────────────────
-    std::vector<CategoryInfo> cats = ScanCategories();
+    const std::vector<std::wstring> targetNames = LoadTargetNames();
+    std::vector<CategoryInfo> cats = ScanCategories(targetNames);
 
     if (cats.empty())
     {

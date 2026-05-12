@@ -39,7 +39,7 @@ processes owned by other users are skipped gracefully.
 
 ## Requirements
 
-- Windows 10 / 11 x64
+- Windows 10 / 11 (x86 or x64)
 - No installation, no admin rights, no external dependencies
 
 ---
@@ -119,29 +119,22 @@ and no message.
 
 ## Extending the tool list
 
-Open `AIProcess-Terminate.cpp` and find the section marked `// EXTEND HERE`:
+Edit `AIProcess-Terminate.ini` (placed next to the `.exe`) — no recompile needed:
 
-```cpp
-static const std::vector<std::wstring> TARGET_NAMES = {
-    L"claude",
-    L"copilot",
-    L"perplexity",
-    L"codex",
-    L"gemini",
-    L"manus",
-    L"antigravity",
-    // EXTEND HERE
-};
+```ini
+[Targets]
+keywords = claude, copilot, perplexity, codex, gemini, manus, antigravity
 ```
 
-Add any keyword that appears in the executable name of the tool you want to
-target. Matching is **partial and case-insensitive**, so `L"gemini"` would
-match `Gemini.exe`, `gemini-helper.exe`, `com.google.gemini.exe`, etc.
+Add or remove comma-separated keywords. Matching is **partial and
+case-insensitive**, so `gemini` matches `Gemini.exe`, `gemini-helper.exe`,
+`com.google.gemini.exe`, etc.
 
 **Currently targeted tools:**
 `claude`, `copilot`, `perplexity`, `codex`, `gemini`, `manus`, `antigravity`
 
-Then rebuild with `build.bat`.
+If the INI file is missing or the `keywords` key is absent, the built-in
+default list above is used as a fallback.
 
 ## Integration in a Total Commander buttonbar
 ```
@@ -157,21 +150,32 @@ menu20=AI Process Terminate
 ## Building from source
 
 Prerequisites: Visual Studio 2022+ with the **Desktop development with C++**
-workload installed (MSVC v143 toolchain, x64).
+workload installed (MSVC v143 toolchain).
 
-Open a **Developer Command Prompt for VS 2022** (or any prompt where
-`vcvarsall.bat x64` has already been sourced) and run:
+Just run:
 
 ```bat
 build.bat
 ```
 
+If no VS environment is active, the script auto-detects the installation via
+`vswhere.exe` and bootstraps the x64 toolchain by default. To build for x86
+instead, source `vcvars32.bat` (or any `vcvarsall.bat` variant) before running
+`build.bat` — the script will use whatever architecture is already set up.
+
 Output: `AIProcess-Terminate.exe` in the same folder.
 
-The build script compiles `resource.rc` with `rc.exe` to embed the application
-icon, then compiles the C++ source with `/W4 /WX` (all warnings treated as
-errors) and links `psapi.lib`, `comctl32.lib`, and `user32.lib`. No
-third-party libraries are required.
+The build script compiles `resource.rc` with `rc.exe`, which bundles:
+
+| Resource | Details |
+|---|---|
+| Application icon | `AIProcess-Terminate.ico` (7 sizes, 16–256 px) |
+| Manifest | `AIProcess-Terminate.manifest` — `asInvoker` UAC, Common Controls v6, Per-Monitor DPI v2, Windows 10/11 compatibility |
+| Version info | `VERSIONINFO` block — file/product version, description, original filename |
+
+The C++ source is then compiled with `/W4 /WX` (warnings as errors) and linked
+against `psapi.lib`, `comctl32.lib`, and `user32.lib`. No third-party
+libraries are required.
 
 ---
 
