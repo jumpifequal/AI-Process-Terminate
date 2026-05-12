@@ -10,7 +10,7 @@
 * add: `VERSIONINFO` resource — file/product version and description visible in Explorer → Properties → Details
 * add: resizable dialog — all controls reflow on resize; minimum size enforced at 400×280
 * add: Per-Monitor DPI v2 support — layout constants and initial window size scale with monitor DPI; adapts on DPI change (`WM_DPICHANGED`)
-* 
+* add: Total Commander integration — `pluginst.inf` + `AIProcess-Terminate.bar` for one-click button bar install
 * change: default dialog size increased from 520×320 to 640×460 (at 96 DPI)
 * change: build script auto-detects Visual Studio via `vswhere.exe`; honours any pre-sourced `vcvarsall` variant
 

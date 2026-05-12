@@ -1,0 +1,7 @@
+[plugininstall]
+description=AI Process-Terminate — kills desktop AI assistant processes in one shot
+type=prg
+file=AIProcess-Terminate.exe
+defaultdir=Tools
+additionalfile=AIProcess-Terminate.ini
+additionalfile=AIProcess-Terminate.bar

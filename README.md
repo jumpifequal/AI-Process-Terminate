@@ -44,6 +44,39 @@ processes owned by other users are skipped gracefully.
 
 ---
 
+## Total Commander integration
+
+The release zip includes three TC-specific files:
+
+| File | Purpose |
+|---|---|
+| `AIProcess-Terminate.bar` | Button bar definition (`TOTALCMD#BAR#DATA` format) |
+| `pluginst.inf` | Auto-install descriptor — tells TC where to copy the files |
+| `AIProcess-Terminate.ini` | Target keyword list (copied alongside the exe) |
+
+### Auto-install (recommended)
+
+1. Keep `AIProcess-Terminate.exe`, `AIProcess-Terminate.ini`,
+   `AIProcess-Terminate.bar`, and `pluginst.inf` in the same folder.
+2. In Total Commander open the folder and double-click
+   `AIProcess-Terminate.bar` — TC recognises the `TOTALCMD#BAR#DATA` header
+   and offers to import it directly, copying the exe and INI to
+   `%COMMANDER_PATH%\Tools\` and adding the button to the bar.
+
+Alternatively: **Configuration → Import plugin/button bar…** and point it at
+`AIProcess-Terminate.bar`.
+
+### Manual button
+
+1. Copy `AIProcess-Terminate.exe` and `AIProcess-Terminate.ini` anywhere
+   (e.g. `%COMMANDER_PATH%\Tools\`).
+2. Right-click the TC button bar → **Change…** → enter:
+   - **Command:** path to `AIProcess-Terminate.exe`
+   - **Start path:** folder containing the exe
+   - **Tooltip:** `AI Process-Terminate`
+
+---
+
 ## Usage
 
 ### Interactive mode (default)
@@ -135,17 +168,6 @@ case-insensitive**, so `gemini` matches `Gemini.exe`, `gemini-helper.exe`,
 
 If the INI file is missing or the `keywords` key is absent, the built-in
 default list above is used as a fallback.
-
-## Integration in a Total Commander buttonbar
-```
-button20=%COMMANDER_PATH%\Tools\aiProcess-Terminate.exe
-cmd20=%COMMANDER_PATH%\Tools\aiProcess-Terminate.exe
-path20=%COMMANDER_PATH%\Tools\
-iconic20=0
-menu20=AI Process Terminate
-```
-
----
 
 ## Building from source
 
