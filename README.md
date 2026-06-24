@@ -195,7 +195,7 @@ The build script compiles `resource.rc` with `rc.exe`, which bundles:
 | Manifest | `AIProcess-Terminate.manifest` — `asInvoker` UAC, Common Controls v6, Per-Monitor DPI v2, Windows 10/11 compatibility |
 | Version info | `VERSIONINFO` block — file/product version, description, original filename |
 
-The C++ source is then compiled with `/W4 /WX` (warnings as errors) and linked
+The C++ source is then compiled with `/W4 /WX /utf-8` (warnings as errors, UTF-8 source) and linked
 against `psapi.lib`, `comctl32.lib`, and `user32.lib`. No third-party
 libraries are required.
 

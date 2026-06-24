@@ -2,6 +2,14 @@
 
 ---
 
+## [2.0.1]
+
+* fix: wait briefly after successful process termination so the drain loop does not immediately rescan processes that Windows is still tearing down
+* fix: clarify the max-iteration error when matching processes keep respawning or cannot finish terminating
+* fix: compile sources as UTF-8 so Unicode text in dialogs and documentation strings is preserved in MSVC builds
+
+---
+
 ## [2.0.0]
 
 * add: target process list moved to `AIProcess-Terminate.ini` — edit keywords without recompiling; falls back to built-in defaults if file is absent

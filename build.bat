@@ -52,14 +52,14 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-cl /W4 /WX /std:c++17 /EHsc /O2 /D_UNICODE /DUNICODE ^
+cl /W4 /WX /std:c++17 /utf-8 /EHsc /O2 /D_UNICODE /DUNICODE ^
    /Fo"%OBJ_DIR%\\" /Fe"%OUT%" ^
    %SRC% ^
    /link psapi.lib comctl32.lib user32.lib /SUBSYSTEM:WINDOWS /MANIFEST:NO "%RC_OBJ%"
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [FAILED] Build error — see output above.
+    echo [FAILED] Build error ??? see output above.
     exit /b %ERRORLEVEL%
 )
 

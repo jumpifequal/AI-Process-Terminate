@@ -571,6 +571,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
                         exitCode = 1;
                     }
                 }
+                else
+                {
+                    WaitForSingleObject(hProc, 1000);
+                }
 
                 CloseHandle(hProc);
             }
@@ -583,7 +587,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
 
     if (foundAny && iterations >= MAX_IT)
     {
-        errors << L"[ERROR] Max iterations reached. Some processes may still be running.\n";
+        errors << L"[ERROR] Max iterations reached. Some matching processes may still be running.\n"
+               << L"        This usually means a selected process is respawning or cannot finish terminating.\n";
         exitCode = 1;
     }
 
