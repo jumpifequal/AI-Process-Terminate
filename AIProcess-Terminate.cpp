@@ -514,7 +514,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
     int       iterations = 0;
     const int MAX_IT     = 20;
 
-    while (foundAny && iterations < MAX_IT)
+    // The extra pass only verifies the result of the last termination attempt.
+    while (foundAny && iterations <= MAX_IT)
     {
         foundAny = false;
         ++iterations;
@@ -534,20 +535,24 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
                     if (MatchesKeyword(pe.szExeFile, kw)) { match = true; break; }
                 if (!match) continue;
 
-                foundAny              = true;
                 const DWORD      pid  = pe.th32ProcessID;
                 const std::wstring nm = pe.szExeFile;
 
                 HANDLE hProc = OpenProcess(
-                    PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION,
+                    SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION |
+                        (iterations <= MAX_IT ? PROCESS_TERMINATE : 0),
                     FALSE, pid);
 
                 if (hProc == nullptr)
                 {
                     const DWORD err  = GetLastError();
+                    // Invalid PID means the process exited after the snapshot.
+                    if (err == ERROR_INVALID_PARAMETER) continue;
+                    foundAny = true;
                     HANDLE      hChk = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
                     if (hChk != nullptr)
                     {
+                        foundAny = true;
                         CloseHandle(hChk);
                         errors << L"[ERROR] Failed to terminate " << nm
                                << L" (PID " << pid << L"): "
@@ -555,6 +560,27 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
                                << L" (" << err << L")\n";
                         exitCode = 1;
                     }
+                    else if (iterations > MAX_IT)
+                    {
+                        errors << L"[ERROR] Cannot verify " << nm << L" (PID " << pid
+                               << L"): " << GetWin32ErrorMessage(err) << L" (" << err << L")\n";
+                    }
+                    continue;
+                }
+
+                // A snapshot may still contain a process that has already exited.
+                if (WaitForSingleObject(hProc, 0) == WAIT_OBJECT_0)
+                {
+                    CloseHandle(hProc);
+                    continue;
+                }
+
+                foundAny = true;
+                if (iterations > MAX_IT)
+                {
+                    errors << L"[ERROR] Still running after " << MAX_IT
+                           << L" termination attempts: " << nm << L" (PID " << pid << L").\n";
+                    CloseHandle(hProc);
                     continue;
                 }
 
@@ -582,10 +608,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
         }
 
         CloseHandle(snap);
-        if (foundAny) Sleep(200);
+        if (foundAny && iterations <= MAX_IT) Sleep(200);
     }
 
-    if (foundAny && iterations >= MAX_IT)
+    if (foundAny && iterations > MAX_IT)
     {
         errors << L"[ERROR] Max iterations reached. Some matching processes may still be running.\n"
                << L"        This usually means a selected process is respawning or cannot finish terminating.\n";

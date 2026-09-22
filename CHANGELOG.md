@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.02]
+
+* fix: request SYNCHRONIZE access so the wait after termination can actually complete
+* fix: skip already-exited processes and verify the final termination attempt before reporting the retry limit
+* fix: include process names and PIDs in retry-limit diagnostics
+
 ---
 
 ## [2.0.1]

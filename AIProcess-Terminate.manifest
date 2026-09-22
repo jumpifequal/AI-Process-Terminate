@@ -4,7 +4,7 @@
   <assemblyIdentity
       type="win32"
       name="AIProcess-Terminate"
-      version="2.0.0.0"
+      version="2.0.2.0"
       processorArchitecture="*"/>
 
   <description>Terminates desktop AI assistant processes in one shot.</description>
