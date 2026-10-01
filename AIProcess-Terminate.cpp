@@ -121,6 +121,17 @@ static bool MatchesKeyword(const std::wstring& exeName, const std::wstring& keyw
 }
 
 // ---------------------------------------------------------------------------
+// Services and their workers run in non-interactive Session 0 on Windows 10/11.
+// Do not count or terminate them, even when their names match a target keyword.
+// If the session cannot be determined, leave the process alone as well.
+// ---------------------------------------------------------------------------
+static bool IsDesktopProcess(DWORD pid)
+{
+    DWORD sessionId = 0;
+    return ProcessIdToSessionId(pid, &sessionId) && sessionId != 0;
+}
+
+// ---------------------------------------------------------------------------
 // Counts running instances per keyword.
 // Returns only categories that have at least one running process.
 // ---------------------------------------------------------------------------
@@ -147,6 +158,7 @@ static std::vector<CategoryInfo> ScanCategories(const std::vector<std::wstring>&
     {
         do
         {
+            if (!IsDesktopProcess(pe.th32ProcessID)) continue;
             for (auto& cat : cats)
                 if (MatchesKeyword(pe.szExeFile, cat.keyword))
                     ++cat.count;
@@ -534,6 +546,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int)
                 for (const auto& kw : selectedKeywords)
                     if (MatchesKeyword(pe.szExeFile, kw)) { match = true; break; }
                 if (!match) continue;
+                if (!IsDesktopProcess(pe.th32ProcessID)) continue;
 
                 const DWORD      pid  = pe.th32ProcessID;
                 const std::wstring nm = pe.szExeFile;

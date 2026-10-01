@@ -35,6 +35,12 @@ in one keypress.
 Only processes owned by the **current user** are affected. System processes and
 processes owned by other users are skipped gracefully.
 
+Windows services and other non-interactive Session 0 processes are excluded
+from both the dialog counts and termination, even if their names match a
+keyword (for example, `codex-windows-sandbox-service.exe`). Processes whose
+session cannot be determined are also left alone. This applies in both
+interactive and automatic mode.
+
 ---
 
 ## Requirements

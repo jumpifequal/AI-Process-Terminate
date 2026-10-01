@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.03]
+
+* fix: exclude Windows services and other Session 0 processes from category counts and every termination pass, including automatic mode
+* fix: leave processes alone when their session cannot be determined, avoiding repeated access-denied errors for protected services
+
+---
+
 ## [2.02]
 
 * fix: request SYNCHRONIZE access so the wait after termination can actually complete
